@@ -1,3 +1,4 @@
+Time, Type, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8
 0,CombatZoneResize,133,251,508,391,TLResume,
 0,HeartTeleport,320,376,,,,
 0,HeartMode,1,,,,,
