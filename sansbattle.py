@@ -3,6 +3,7 @@ from pyglet.window import key
 import random
 import math
 
+from attacks import *
 import attackloader
 
 pyglet.resource.path = ['Assets/']
@@ -31,8 +32,13 @@ class SansBattle(pyglet.window.Window):
 
         self.current_attack = 0
         self.in_attack = False
-        attackloader.load_attack(ATTACKS[self.current_attack])
+        #attackloader.load_attack(ATTACKS[self.current_attack])
         self.attackLines = []
+
+        self.attack_sprites = pyglet.graphics.Batch()
+        self.platforms = []
+
+        self.box_bounds = {}
 
         self.player = Player()
 
@@ -50,6 +56,29 @@ class SansBattle(pyglet.window.Window):
         self.current_attack += 1
         self.in_attack = False
         attackloader.load_attack(ATTACKS[self.current_attack])
+    
+    def update_platforms(self):
+        out_of_bounds_platforms = [] # I have to do this to avoid changing the size of platforms during iteration
+        for p in self.platforms:
+            p.update(self.box_bounds)
+            p_bounds = p.get_bounds()
+            if p.direction == 0:
+                if p_bounds['left'] > self.box_bounds['right']:
+                    out_of_bounds_platforms.append(p)
+            if p.direction == 1:
+                if p_bounds['top'] < self.box_bounds['bottom']:
+                    out_of_bounds_platforms.append(p)
+            if p.direction == 2:
+                if p_bounds['right'] < self.box_bounds['left']:
+                    out_of_bounds_platforms.append(p)
+            if p.direction == 3:
+                if p_bounds['bottom'] > self.box_bounds['top']:
+                    out_of_bounds_platforms.append(p)
+        
+        for p in out_of_bounds_platforms:
+            self.platforms.remove(p)
+            print(self.platforms)
+            # Kill off-screen instances
 
     def on_draw(self):
         self.render()
@@ -68,7 +97,7 @@ class SansBattle(pyglet.window.Window):
             self.alive = 0
         elif symbol == key.SPACE:
             self.player.gravity = not self.player.gravity
-            self.player.slammed = not self.player.slammed
+            self.platforms.append(Platform([320, 130, 100, 2, 100, 1], self.attack_sprites))
             # print(self.player.is_on_ground(0, 0))
         self.keys[symbol] = True
 
@@ -80,13 +109,15 @@ class SansBattle(pyglet.window.Window):
         self.draw_rect(self.player.box_center[0] - (self.player.box_size[0] / 2) - 5,
                        self.player.box_center[1] - (self.player.box_size[1] / 2) - 5,
                        self.player.box_size[0] + 10, self.player.box_size[1] + 10,
-                       (255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255))
+                       color=(255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255))
         self.draw_rect(self.player.box_center[0] - (self.player.box_size[0] / 2),
                        self.player.box_center[1] - (self.player.box_size[1] / 2),
                        self.player.box_size[0], self.player.box_size[1],
-                       (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+                       color=(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
 
-        #self.player.image.blit(self.player.x, self.player.y)
+        for p in self.platforms:
+            p.render()
+        self.attack_sprites.draw()
         self.player.sprite.draw()
 
         self.flip()
@@ -101,7 +132,10 @@ class SansBattle(pyglet.window.Window):
             self.dt = pyglet.clock.tick()
             event = self.dispatch_events()
 
-            self.player.update(self.keys, self.dt)
+            self.box_bounds = self.player.get_box_bounds()
+
+            self.update_platforms()
+            self.player.update(self.keys, self.platforms, self.dt)
 
             self.render()
 
@@ -129,6 +163,10 @@ class Player():
         self.top_box_collide = False
         self.bottom_box_collide = False
 
+        self.on_platform = False
+
+        self.platforms = []
+
         self.speed = 150  # Change this to change move speed
         self.dx = 0
         self.dy = 0
@@ -145,9 +183,11 @@ class Player():
 
         self.sprite = pyglet.sprite.Sprite(img=self.image, x=self.x, y=self.y)
 
-    def update(self, keys, dt):
+    def update(self, keys, platforms, dt):
 
         self.detect_collisions()
+
+        self.platforms = platforms
 
         if self.on_ground():
             if self.slammed:
@@ -234,10 +274,20 @@ class Player():
                     self.dy = self.speed
             if self.angle == 90 or self.angle == 270:
                 self.dx = 0
+                # Platform Logic Here
+                p = self.get_platform_overlap()
+                if p != False:
+                    if self.dy >= 0:
+                        self.dx = (round(math.cos(math.radians(p.direction * 90))) * p.speed) * 1
+                        self.dy = 0
+                        self.y = p.get_bounds()['top'] + 8.5
+                        self.on_platform = True
+                if p == False or self.dy < 0:
+                    self.on_platform = False
                 if key.LEFT in keys and key.RIGHT not in keys:
-                    self.dx = -self.speed
+                    self.dx -= self.speed
                 if key.RIGHT in keys and key.LEFT not in keys:
-                    self.dx = self.speed
+                    self.dx += self.speed
             
             self.sprite.color = (0, 24, 255)
 
@@ -322,11 +372,27 @@ class Player():
         if self.angle == 0:
             return self.right_box_collide
         elif self.angle == 90:
-            return self.bottom_box_collide
+            # p = self.get_platform_overlap()
+            # if p != False:
+            #     return self.on_platform
+            return self.bottom_box_collide or self.on_platform
         elif self.angle == 180:
             return self.left_box_collide
         elif self.angle == 270:
             return self.top_box_collide
+    
+    def get_platform_overlap(self):
+        if self.angle != 90:
+            return False
+        for p in self.platforms:
+            p_bounds = p.get_bounds()
+            bounds = self.get_bounds()
+            if (bounds['left'] < p_bounds['right']) and (bounds['right'] > p_bounds['left']) and (
+                bounds['bottom'] <= p_bounds['top'] + 2) and (bounds['bottom'] >= p_bounds['top'] - 2):
+                return p
+        return False
+        
+        return False
     
     def jump(self):
         x = round(math.cos(math.radians(self.angle)))
@@ -338,3 +404,14 @@ class Player():
     def slam(self, direction):
         self.angle = direction * 90
         self.slammed = True
+    
+    def get_box_bounds(self):
+        box_bound_left = self.box_center[0] - (self.box_size[0] / 2) + 8
+        box_bound_right = self.box_center[0] + (self.box_size[0] / 2) - 8
+        box_bound_top = self.box_center[1] + (self.box_size[1] / 2) - 8
+        box_bound_bottom = self.box_center[1] - (self.box_size[1] / 2) + 8
+
+        return {'left': box_bound_left, 'right': box_bound_right, 'top': box_bound_top, 'bottom': box_bound_bottom}
+    
+    def get_bounds(self):
+        return {'left': self.x - 8, 'right': self.x + 8, 'top': self.y + 8, 'bottom': self.y - 8}
