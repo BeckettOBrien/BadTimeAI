@@ -6,6 +6,11 @@ import math
 from attacks import *
 import attackloader
 
+gl_conf = pyglet.gl.Config(sample_buffers=1, samples=4)
+pyglet.gl.glEnable(pyglet.gl.GL_TEXTURE_2D)
+pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_NEAREST) 
+pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_NEAREST)
+
 pyglet.resource.path = ['Assets/']
 pyglet.resource.reindex()
 
@@ -22,8 +27,9 @@ ATTACKS = ['sans_intro.csv', 'sans_bonegap1.csv', 'sans_bluebone.csv', 'sans_bon
 # Attacks have been added in order
 
 class SansBattle(pyglet.window.Window):
-    def __init__(self, width=640, height=480, fps=False, *args, **kwargs):
-        super(SansBattle, self).__init__(width, height, *args, **kwargs)
+    def __init__(self, width=640, height=480, fps=False, config=gl_conf, *args, **kwargs):
+        super(SansBattle, self).__init__(width, height, vsync=True, *args, **kwargs)
+        self.fps_display = pyglet.window.FPSDisplay(window=self)
 
         self.keys = {}
 
@@ -103,6 +109,7 @@ class SansBattle(pyglet.window.Window):
 
     def render(self):
         self.clear()
+        self.fps_display.draw();
 
         # Add stuff you want to render here.
         # Preferably in the form of a batch.
@@ -115,22 +122,19 @@ class SansBattle(pyglet.window.Window):
                        self.player.box_size[0], self.player.box_size[1],
                        color=(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
 
-        for p in self.platforms:
-            p.render()
+        # for p in self.platforms:
+        #     p.render()
+        # pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MAG_FILTER, pyglet.gl.GL_NEAREST) 
+        # pyglet.gl.glTexParameteri(pyglet.gl.GL_TEXTURE_2D, pyglet.gl.GL_TEXTURE_MIN_FILTER, pyglet.gl.GL_NEAREST)
         self.attack_sprites.draw()
         self.player.sprite.draw()
 
         self.flip()
-
-    def run(self):
-        while self.alive == 1:
-            # -----------> This is key <----------
-            # This is what replaces pyglet.app.run()
-            # but is required for the GUI to not freeze
-            #
-
-            self.dt = pyglet.clock.tick()
-            event = self.dispatch_events()
+    
+    def update(self, dt):
+        if self.alive == 1:
+            self.dt = dt
+            self.dispatch_events()
 
             self.box_bounds = self.player.get_box_bounds()
 
@@ -138,6 +142,15 @@ class SansBattle(pyglet.window.Window):
             self.player.update(self.keys, self.platforms, self.dt)
 
             self.render()
+        else:
+            self.close()
+
+    def start(self):
+        pyglet.clock.schedule_interval(self.update, 1/60.0);
+        pyglet.gl.glEnable(pyglet.gl.GL_BLEND)
+        pyglet.gl.glBlendFunc(pyglet.gl.GL_SRC_ALPHA, pyglet.gl.GL_ONE_MINUS_SRC_ALPHA)
+        pyglet.app.run()
+
 
     def draw_rect(self, x, y, width, height, color):
         pyglet.graphics.draw(4, pyglet.gl.GL_QUADS,

@@ -1,10 +1,14 @@
 import pyglet
 import math
+from PIL import Image
 import numpy as np
+import io
+import time
 
+# PLATFORMS:
 class Platform:
     def __init__(self, params, batch):
-        # self.image = pyglet.resource.image('platform1.png')
+        self.image = pyglet.resource.image('platform.png')
 
         self.x = params[0]
         self.y = params[1]
@@ -14,14 +18,15 @@ class Platform:
         self.reverse = bool(params[5])
 
         self.height = 7
+        self.img_height = self.height + 4
 
-        # self.img_data = set_image_size(self.image, self.width, self.height)
-        # self.image = pyglet.image.AbstractImage(self.width, self.height)
-        # self.image.anchor_x = self.width / 2
-        # self.image.anchor_y = self.height / 2
-        # self.image.blit_into(img_data, 0, 0, 0)
-        # self.sprite = pyglet.sprite.Sprite(self.image, self.x, self.y, batch=batch)
-    
+        self.image = set_image_size(self.image, self.width, self.img_height)
+
+        self.image.anchor_x = self.width // 2
+        self.image.anchor_y = self.height // 2
+        
+        self.sprite = pyglet.sprite.Sprite(self.image, self.x, self.y, batch=batch)
+
     def update(self, box_bounds):
         if self.reverse:
             bounds = self.get_bounds()
@@ -40,7 +45,7 @@ class Platform:
         self.x += math.cos(math.radians(self.direction*90))*self.speed/60
         self.y -= math.sin(math.radians(self.direction*90))*self.speed/60
 
-        # self.sprite.update(self.x, self.y)
+        self.sprite.update(self.x, self.y)
     
     def render(self):
         draw_rect(self.x - (self.width / 2),
@@ -51,6 +56,7 @@ class Platform:
                        self.y - (self.height / 2) + 1,
                        self.width-2, self.height-2,
                        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        self.image.blit(self.x, self.y)
 
     def get_bounds(self):
         return {'left': self.x - (self.width/2), 'right': self.x + (self.width/2),
@@ -74,6 +80,18 @@ def PlatformRepeat(params, batch):
     
     return platforms
 
+# BONES:
+# TODO: Implement Bone Classes/Functions Here
+class Bone:
+    def __init__(self, x, y, width, direction, speed, color):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.direction = direction
+        self.speed = speed
+        self.color = color
+
+# HELPER FUNCTIONS:
 def draw_rect(x, y, width, height, color):
         pyglet.graphics.draw(4, pyglet.gl.GL_QUADS,
                              ('v2f', [x, y, x + width, y, x + width, y + height, x, y + height]),
@@ -84,7 +102,10 @@ def set_image_size(img, x, y):
     raw_img = img.get_image_data()
     format = 'RGBA'
     pitch = raw_img.width * len(format)
-    rgba = np.array(list(img.get_image_data().get_data(format, pitch))).reshape(-1, raw_img.width, len(format))
+
+    dat = raw_img.get_data( format, pitch)
+    rgba = np.frombuffer( dat, np.dtype( np.ubyte ) )
+    rgba = rgba.reshape( -1, img.width, 4 )
     
     mid_y = rgba[round(raw_img.height/2),:] # This is needed to stretch along Y
     while rgba.shape[0] < y:
@@ -92,7 +113,9 @@ def set_image_size(img, x, y):
     mid_x = rgba[:,round(raw_img.width/2)] # This is needed to stretch along X
     while rgba.shape[1] < x:
         rgba = np.insert(rgba, round(raw_img.width/2), mid_x, 1)
-    
-    raw_img.set_data(format, pitch, ''.join(map(chr, rgba.tostring())))
 
-    return raw_img
+    img = pyglet.image.ImageData( rgba.shape[ 1 ], rgba.shape[ 0 ], format, rgba.tobytes() )
+
+    # Image.fromarray(rgba).save('temp.png') # This is for testing purposes
+
+    return img

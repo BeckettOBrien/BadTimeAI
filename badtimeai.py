@@ -2,4 +2,4 @@
 #import tensorflow as tf
 from sansbattle import SansBattle
 import pyglet
-SansBattle().run()
+SansBattle().start()
